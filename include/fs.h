@@ -52,7 +52,31 @@ struct FileSystem {
 
 /* File System Functions */
 
-void fs_debug(Disk *disk);
+void fs_debug(Disk *disk) {
+    // Vaidation Checks
+    if (disk == NULL) {
+        perror("fs_debug: Error disk is invalid");
+        return;
+    }
+    if (!disk->mounted) { 
+        fprintf(stderr, "fs_debug: Error disk is not mounted\n");
+        return;
+    }
+
+    Block block_buffer;
+    SuperBlock superblock;
+
+    // Attempt to copy the content of super block into block_buffer
+    if (disk_read(disk, 0, block_buffer.data) < 0) {
+        perror("fs_debug: Failed to read SuperBlock from disk");
+        return;
+    }
+
+    block_buffer.super = superblock; // Copy the initialized superblock into the union
+
+    /
+
+}
 
 
 bool fs_format(Disk *disk) 
@@ -246,7 +270,7 @@ void fs_unmount(FileSystem *fs) {
         // Continue cleanup in case memory was still allocated
     }
 
-    // --- Memory Cleanup ---
+    // Memory Cleanup 
     if (fs->meta_data != NULL) {
         free(fs->meta_data);
         fs->meta_data = NULL;
