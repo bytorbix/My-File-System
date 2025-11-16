@@ -1,4 +1,5 @@
 #include "fs.h"
+#include "disk.h"
 #include <stdio.h> 
 #include <string.h> 
 #include <stdlib.h> 
@@ -308,13 +309,72 @@ void fs_unmount(FileSystem *fs) {
     }
 
     if (fs->disk != NULL) {
-        // Dettach the disk from the file system
-        fs->disk->mounted = false;
-        fs->disk = NULL; // Clear the pointer to the disk
+        disk_close(fs->disk);
     }
 }
 
-ssize_t fs_create(FileSystem *fs) {return -1;}
+ssize_t fs_create(FileSystem *fs) {
+    // Validation check
+     if (fs == NULL || fs->disk == NULL) {
+        perror("fs_create: Error fs or disk is invalid (NULL)"); 
+        return -1;
+    }
+    if (!fs->disk->mounted) { 
+        fprintf(stderr, "fs_create: Error disk is not mounted, cannot procceed t\n");
+        return -1;
+    }
+
+    Block block_buffer;
+    uint32_t total_inode_blocks = fs->meta_data->inode_blocks;
+
+    for (uint32_t i = 1; i <= total_inode_blocks; i++)
+    {
+        // Attempt to copy inode table into the block
+        if (disk_read(fs->disk, i, block_buffer.data) < 0) {
+            perror("fs_create: Failed to read Inode Block from disk");
+            return -1;
+        }
+        // find a free inode block
+        Inode inode_block = block_buffer.inodes[i];
+        if (inode_block.valid==0) {
+            for (uint32_t j = 0; j < INODES_PER_BLOCK; j++)
+            {
+                Inode *current_node = &block_buffer.inodes[j];
+                if(current_node->valid==0) {
+                    current_node->valid = 1;
+                    current_node->size = 0;
+
+                    for (int k = 0; k < POINTERS_PER_NODE; k++)
+                    {
+                        current_node->direct[k] = 0;
+                    }
+
+                    current_node->indirect = 0 ;
+
+                    if (disk_write(fs->disk, i, block_buffer.data) < 0) {
+                        perror("fs_create: Failed to write updated Inode Block");
+                        current_node->valid = 1;
+                        return -1;
+                    }
+
+                    ssize_t inode_number = (ssize_t)((i-1) * INODES_PER_BLOCK + j); // ?
+
+                    return inode_number;
+                    
+                }
+            }
+            
+            
+        }
+    }
+
+    //No free inode found after checking all blocks
+    fprintf(stderr, "fs_create: Error, inode table is full (max %u inodes)\n", fs->meta_data->inodes);
+    return -1;
+}
+
+
+
 bool fs_remove(FileSystem *fs, size_t inode_number) {return false;}
 ssize_t fs_stat(FileSystem *fs, size_t inode_number) {return -1;}
 ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset) {return -1;}
