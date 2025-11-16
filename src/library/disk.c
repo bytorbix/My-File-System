@@ -1,5 +1,5 @@
 
-#include "include/disk.h"
+#include "disk.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -37,7 +37,6 @@ Disk * disk_open(const char *path, size_t blocks) {
     // final construction 
     disk->fd      = fd;
     disk->blocks  = blocks;
-    disk->mounted = true;
 
     return disk;
 }
@@ -61,10 +60,6 @@ Disk * disk_open(const char *path, size_t blocks) {
 ssize_t disk_write(Disk *disk, size_t block, char *data) {
     if (disk == NULL) {
         perror("disk_write: disk is invalid");
-        return -1;
-    }
-    if (disk->mounted == false) {
-        perror("disk_write: disk is not mounted");
         return -1;
     }
     if (block >= disk->blocks) {
@@ -98,10 +93,6 @@ ssize_t disk_write(Disk *disk, size_t block, char *data) {
 ssize_t disk_read(Disk *disk, size_t block, char *data) {
     if (disk == NULL) {
         perror("disk_read: disk is invalid (NULL pointer)");
-        return -1;
-    }
-    if (!disk->mounted) {
-        perror("disk_write: disk is not mounted");
         return -1;
     }
     if (block >= disk->blocks) {
