@@ -15,23 +15,27 @@ inline void flip_bit(uint32_t *bitmap, int offset) {
     *bitmap ^= mask;
 }
 
-inline void set_bit_to_1(uint32_t *bitmap_word, int offset) {
-    if (offset >= 0 && offset <= 31) {
-        *bitmap_word |= (1U << offset); // Guarantees the bit is SET to 1
-    }
-}
+static inline void set_bit(uint32_t *bitmap, int block, int bit_to_set) {
 
-inline void set_bit_to_0(uint32_t *bitmap_word, int offset) {
-    if (offset >= 0 && offset <= 31) {
-        // 1. Create the Mask: 1 shifted to the target position (e.g., 0x00000020 for offset 5)
-        uint32_t mask = 1U << offset; 
+    int word_index = block / BITS_PER_WORD;
+    int offset = block % BITS_PER_WORD;
 
-        // 2. Invert the Mask: ~mask sets the target bit to 0 and all other 31 bits to 1.
-        //    (e.g., ~0x00000020 = 0xFFFFFFDF)
-        
-        // 3. Bitwise AND: ANDing the word with this inverted mask
-        //    (X & 0) always results in 0 (clears the target bit).
-        //    (X & 1) leaves all other bits unchanged.
-        *bitmap_word &= ~mask; // Correctly clears the bit to 0
+    if (bit_to_set == 1) {
+        bitmap[word_index] |= (1U << offset);
     }
+    else if (bit_to_set == 0) {
+        if (offset >= 0 && offset <= 31) {
+            // 1. Create the Mask: 1 shifted to the target position (e.g., 0x00000020 for offset 5)
+            uint32_t mask = 1U << offset;
+
+            // 2. Invert the Mask: ~mask sets the target bit to 0 and all other 31 bits to 1.
+            //    (e.g., ~0x00000020 = 0xFFFFFFDF)
+            
+            // 3. Bitwise AND: ANDing the word with this inverted mask
+            //    (X & 0) always results in 0 (clears the target bit).
+            //    (X & 1) leaves all other bits unchanged.
+            bitmap[word_index] &= ~mask; // Correctly clears the bit to 0
+        }
+    }
+ 
 }

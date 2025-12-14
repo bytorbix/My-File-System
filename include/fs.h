@@ -2,6 +2,7 @@
 
     #ifndef FS_H
     #define FS_H
+    
 
     #include "disk.h"
     #include <stdbool.h>
@@ -13,8 +14,10 @@
     // File System Constants
     #define MAGIC_NUMBER (0xf0f03410)
     #define INODES_PER_BLOCK (128)
-    #define POINTERS_PER_NODE (5)
+    #define POINTERS_PER_INODE (5)
     #define POINTERS_PER_BLOCK (1024)
+    #define BITS_PER_WORD (32)
+
 
 
     // File System Structure
@@ -32,7 +35,7 @@
     struct Inode{
         uint32_t valid;                      // Status: 1 if allocated (in use), 0 if free (available).
         uint32_t size;                       // File size in bytes.
-        uint32_t direct[POINTERS_PER_NODE];  // Direct block addresses for the file's first data blocks.
+        uint32_t direct[POINTERS_PER_INODE];  // Direct block addresses for the file's first data blocks.
         uint32_t indirect;                   // Address of the single indirect block (1024 indirect pointers).
     };
 
@@ -50,7 +53,7 @@
     typedef struct FileSystem FileSystem;
     struct FileSystem {
         Disk *disk;             // Instance of the emulated Disk
-        uint32_t *free_blocks;      // Array of free blocks, (In-Memory Bitmap Cache)
+        uint32_t *bitmap;      // Array of free blocks, (In-Memory Bitmap Cache)
         SuperBlock *meta_data;  // Meta data of the file system
     };
 
