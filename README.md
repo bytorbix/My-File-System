@@ -1,4 +1,3 @@
-```markdown
 # MFS - Modular File System with Predictive Allocation
 
 **MFS** is a research-oriented file system implementation in C. It is designed to bridge the gap between logical file abstraction and physical disk mapping by implementing proactive allocation strategies and advanced indexing.
@@ -106,4 +105,3 @@ make clean
 ## 📄 License
 
 MFS is released under the MIT License. Use of this source code is governed by an MIT-style license that can be found in the LICENSE file.
-```
