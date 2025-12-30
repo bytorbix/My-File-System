@@ -5,7 +5,7 @@
 ## 📖 Abstract
 
 Traditional file systems (like FAT) often suffer from performance degradation due to linear search times ($O(N)$) and external fragmentation. MFS addresses these "Time-Space Optimization" challenges by introducing two core architectural shifts:
-1.  **Logarithmic Indexing:** Utilizing **B-Trees** to reduce file lookup time to $O(\log n)$.
+1.  **Logarithmic Indexing:** Utilizing **B-Trees** to reduce file lookup time to O(log n).
 2.  **Statistics Allocator:** A proactive algorithm that uses historical data to predict file growth, allocating "buffers" to prevent fragmentation before it happens.
 
 ## 🏗️ Architecture
@@ -94,13 +94,13 @@ make clean
 
 ## 📅 Roadmap
 
-[x] Phase 1: Research & Theoretical Planning
-[x] Phase 2: Virtual Disk Implementation
-[/] Phase 3: Base File System Functions
-[ ] Phase 4: FS Core Logic
-[ ] Phase 5: Advanced Optimization & Algorithms
-[ ] Phase 6: Stress Testing & Performance Analysis
-[ ] Phase 7: CLI Shell & User Interface
+- [x] Phase 1: Research & Theoretical Planning
+- [x] Phase 2: Virtual Disk Implementation
+- [/] Phase 3: Base File System Functions
+- [ ] Phase 4: FS Core Logic
+- [ ] Phase 5: Advanced Optimization & Algorithms
+- [ ] Phase 6: Stress Testing & Performance Analysis
+- [ ] Phase 7: CLI Shell & User Interface
 
 ## 📄 License
 
