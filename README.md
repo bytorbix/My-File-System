@@ -96,7 +96,7 @@ make clean
 
 - [x] Phase 1: Research & Theoretical Planning
 - [x] Phase 2: Virtual Disk Implementation
-- [/] Phase 3: Base File System Functions
+- [x] Phase 3: Base File System Functions
 - [ ] Phase 4: FS Core Logic
 - [ ] Phase 5: Advanced Optimization & Algorithms
 - [ ] Phase 6: Stress Testing & Performance Analysis
