@@ -6,11 +6,9 @@
 #include <stdlib.h> 
 #include <math.h>
 
+
+
 /* File System Functions Definitions */
-
-
-
-
 void fs_debug(FileSystem *fs) {
     if (fs->disk == NULL || fs == NULL) {
         perror("fs_debug: Error disk is invalid");
@@ -341,13 +339,11 @@ void fs_unmount(FileSystem *fs) {
 }
 
 
-/**
- * @brief Attempts to find and allocate a contiguous run of blocks using the First Fit algorithm.
- *
- * @param fs Pointer to the FileSystem structure.
- * @param blocks_to_reserve The number of contiguous blocks requested.
- * @return size_t* A pointer to an array of allocated block numbers (indices) on success.
- * The array must be freed by the caller. Returns NULL on failure (disk full or fragmentation).
+
+/*
+ * Allocates contiguous disk blocks using the Best-Fit algorithm.
+ * Scans free runs in the bitmap, picks the smallest one that fits.
+ * Returns an array of allocated block indices, or NULL on failure.
  */
 size_t* fs_allocate(FileSystem *fs, size_t blocks_to_reserve) {
     // Initial Validation Checks
@@ -373,6 +369,10 @@ size_t* fs_allocate(FileSystem *fs, size_t blocks_to_reserve) {
 
     // Declaring the allocation blocks array
     size_t *allocated_array = calloc(blocks_to_reserve, sizeof(size_t)); 
+    size_t best_start = 0;
+    size_t best_length = total_blocks + 1;
+    bool found_any = false;
+
     if (allocated_array == NULL) {
         perror("fs_allocate: Failed to allocate memory for return array");
         return NULL; 
@@ -394,35 +394,45 @@ size_t* fs_allocate(FileSystem *fs, size_t blocks_to_reserve) {
                 start_block_index = i; 
             }
             temp_count++; 
-
-            // Row Found, Proceeding with allocation
-            if (temp_count == blocks_to_reserve) {
-                // Inner loop for saving the results on the allocation array
-                for (size_t j = 0; j < blocks_to_reserve; j++)
-                {
-                    // Marking the index block to iterate inside the row
-                    size_t block_index = start_block_index + j;
-                    
-                    // Attempt to allocate the block in the bitmap (set the bit to 1)
-                    set_bit(bitmap, block_index, 1);
-                    allocated_array[j] = block_index;
-
-                }
-                // Returning the allocated array
-                return allocated_array;
-            }
         }
-        // Block is allocated
-        else { 
-            temp_count = 0; // Reset the counter
-            
+        else 
+        {
+            if ((temp_count >= blocks_to_reserve) && (temp_count < best_length)) {
+                best_start = start_block_index;
+                best_length = temp_count;
+                found_any = true;
+                if (temp_count == blocks_to_reserve) {
+                    break;
+                }
+            }
+            temp_count = 0; //Reset the counter
         }
     }
+    if ((temp_count >= blocks_to_reserve) && (temp_count < best_length)) {
+        best_start = start_block_index;
+        best_length = temp_count;
+        found_any = true;
+    }
+    if (found_any) {
+        // loop for saving the results on the allocation array
+        for (size_t j = 0; j< blocks_to_reserve; j++) {
 
-    // Failure, loop finished without finding enough space for the row
-    free(allocated_array);
-    fprintf(stderr, "fs_allocate: Not enough contiguous space available for %zu blocks (Fragmentation).\n", blocks_to_reserve);
-    return NULL;
+            // Marking the index block to iterate inside the row
+            size_t block_index = best_start + j;
+
+            // allocate the block in the bitmap (set the bit to 1)
+            set_bit(bitmap, block_index, 1);
+            allocated_array[j] = block_index;
+        }
+        // Returning the allocated array
+        return allocated_array;
+    }
+    else {
+        // Failure, loop finished without finding enough space for the row
+        free(allocated_array);
+        fprintf(stderr, "fs_allocate: Not enough contiguous space available for %zu blocks (Fragmentation).\n", blocks_to_reserve);
+        return NULL;
+    }
 }
 
 
@@ -488,7 +498,27 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
         return -1;
     }
 
+
+    // Calculate Inode Block and offset
+    uint32_t inode_block_idx = 1 + (inode_number / INODES_PER_BLOCK);
+    uint32_t inode_offset = inode_number % INODES_PER_BLOCK;
+
+    // Read the inode block
+    Block inode_buffer;
+    if (disk_read(fs->disk, inode_block_idx, inode_buffer.data) < 0) {
+        perror("fs_write: Failed to read inode block");
+        return -1;
+    }
     
+    // Get pointer to the target inode
+    Inode *inode = &inode_buffer[inode_offset];
+
+    // Check if inode is valid
+    if (!inode->valid) {
+        fprintf(stderr, "fs_write: Error inode %zu is not valid\n", inode_number);
+        return -1;
+    }
+
     
 
 }
