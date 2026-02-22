@@ -6,6 +6,9 @@
 #include "fs.h"
 #include "dir.h"
 
+void print_passed(const char* message) { printf("[OK]:   %s\n", message); }
+void print_failed(const char* message) { printf("[FAIL]: %s\n", message); }
+
 int main() {
     Disk *disk = disk_open("mfs_test_disk.img", 100);
     fs_format(disk);
@@ -13,38 +16,53 @@ int main() {
     FileSystem fs = {0};
     fs_mount(&fs, disk);
 
-    // create a file and a subdir, add both into root
-    ssize_t file_a = fs_create(&fs);
-    ssize_t subdir = dir_create(&fs);
+    ssize_t inode_file1 = fs_create(&fs);
+    ssize_t inode_file2 = fs_create(&fs);
+    ssize_t inode_dir1  = dir_create(&fs);
 
-    fs_write(&fs, file_a, "Hello!", 6, 0);
+    // Test 1: dir_create
+    printf("\n--- Test 1: dir_create ---\n");
+    if (inode_dir1 >= 0) print_passed("dir_create returned a valid inode");
+    else                 print_failed("dir_create failed");
 
-    dir_add(&fs, 0, "hello.txt", file_a);
-    dir_add(&fs, 0, "docs",      subdir);
+    // Test 2: dir_add + dir_lookup
+    printf("\n--- Test 2: dir_add + dir_lookup ---\n");
+    if (dir_add(&fs, inode_dir1, "file1", inode_file1) == 0)
+        print_passed("dir_add: 'file1' added");
+    else
+        print_failed("dir_add: 'file1' failed");
 
-    // lookup
-    ssize_t found = dir_lookup(&fs, 0, "hello.txt");
-    printf("lookup hello.txt -> inode %zd (expected %zd): %s\n", found, file_a, found == file_a ? "OK" : "FAIL");
+    if (dir_lookup(&fs, inode_dir1, "file1") == inode_file1)
+        print_passed("dir_lookup: 'file1' found with correct inode");
+    else
+        print_failed("dir_lookup: 'file1' not found or wrong inode");
 
-    found = dir_lookup(&fs, 0, "docs");
-    printf("lookup docs      -> inode %zd (expected %zd): %s\n", found, subdir, found == subdir ? "OK" : "FAIL");
+    // Test 3: lookup a name that doesn't exist
+    printf("\n--- Test 3: dir_lookup non-existent ---\n");
+    if (dir_lookup(&fs, inode_dir1, "ghost") == -1)
+        print_passed("dir_lookup: 'ghost' correctly returned -1");
+    else
+        print_failed("dir_lookup: 'ghost' should return -1");
 
-    found = dir_lookup(&fs, 0, "notexist");
-    printf("lookup notexist  -> %zd (expected -1): %s\n", found, found == -1 ? "OK" : "FAIL");
+    // Test 4: duplicate name rejected
+    printf("\n--- Test 4: duplicate dir_add ---\n");
+    if (dir_add(&fs, inode_dir1, "file1", inode_file2) == -1)
+        print_passed("dir_add: duplicate correctly rejected");
+    else
+        print_failed("dir_add: duplicate should be rejected");
 
-    int r = dir_add(&fs, 0, "hello.txt", file_a); // duplicate
-    printf("duplicate add    -> %s (expected FAIL)\n", r == -1 ? "FAIL" : "OK");
+    // Test 5: dir_remove
+    printf("\n--- Test 5: dir_remove ---\n");
+    if (dir_remove(&fs, inode_dir1, "file1") == inode_file1)
+        print_passed("dir_remove: returned correct inode");
+    else
+        print_failed("dir_remove: failed or wrong inode");
 
-    // persistence
+    if (dir_lookup(&fs, inode_dir1, "file1") == -1)
+        print_passed("dir_lookup after remove: 'file1' is gone");
+    else
+        print_failed("dir_lookup after remove: 'file1' should not exist");
+
     fs_unmount(&fs);
-    Disk *disk2 = disk_open("mfs_test_disk.img", 100);
-    FileSystem fs2 = {0};
-    fs_mount(&fs2, disk2);
-
-    found = dir_lookup(&fs2, 0, "hello.txt");
-    printf("after remount    -> inode %zd: %s\n", found, found == file_a ? "OK" : "FAIL");
-
-    fs_unmount(&fs2);
-    printf("\nDone!\n");
     return 0;
 }

@@ -64,7 +64,7 @@
 
     typedef struct DirEntry DirEntry; 
     struct DirEntry {
-        uint32_t inode_number; // 0 = empty/deleted slot
+        uint32_t inode_number; // UINT32_MAX = empty/deleted slot
         char name[28]; // Dir Name
     };
 
@@ -90,5 +90,6 @@
     ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset);
     size_t* fs_allocate(FileSystem *fs, size_t blocks_to_reserve);
     bool fs_bitmap_to_disk(FileSystem *fs);
+    ssize_t fs_lookup(FileSystem *fs, const char *path);
 
     #endif // FS_H

@@ -10,5 +10,7 @@
 ssize_t dir_create(FileSystem *fs);
 int     dir_add(FileSystem *fs, size_t dir_inode, const char *name, size_t inode_number);
 ssize_t dir_lookup(FileSystem *fs, size_t dir_inode, const char *name);
+ssize_t dir_remove(FileSystem *fs, size_t inode_dir, const char *name);
+
 
 #endif // DIR_H

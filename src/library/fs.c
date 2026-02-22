@@ -1,5 +1,6 @@
 #include "fs.h"
 #include "disk.h"
+#include "dir.h"
 #include "utils.h"
 #include <stdio.h> 
 #include <string.h> 
@@ -860,4 +861,30 @@ ssize_t fs_stat(FileSystem *fs, size_t inode_number)
     }
 }
 
+ssize_t fs_lookup(FileSystem *fs, const char *path) 
+{
+    // Validation check
+    if (fs == NULL || fs->disk == NULL || path == NULL) {
+        perror("fs_lookup: Error fs, disk or path is invalid (NULL)"); 
+        return -1;
+    }
+    if (!fs->disk->mounted) { 
+        fprintf(stderr, "fs_lookup: Error disk is not mounted, cannot procceed t\n");
+        return -1;
+    }
+    if (strcmp(path, "/") == 0) return 0; // root dir
 
+    char path_copy[256];
+    strncpy(path_copy, path, 255);
+
+    size_t current_inode = 0; // start at root
+    char *token = strtok(path_copy, "/");
+
+    while (token != NULL) {
+        ssize_t next = dir_lookup(fs, current_inode, token);
+        if (next == -1) return -1; // component not found
+        current_inode = (size_t)next;
+        token = strtok (NULL, "/");
+    }
+    return (ssize_t)current_inode;
+}
