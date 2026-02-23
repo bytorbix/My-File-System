@@ -2,7 +2,7 @@ CC     = gcc
 CFLAGS = -Wall -Wextra -g -fsanitize=address -Iinclude
 LIBS   = -lm
 
-SRCS = main.c src/library/fs.c src/library/disk.c src/library/dir.c
+SRCS = main.c src/library/fs.c src/library/disk.c src/library/dir.c src/library/bitmap.c
 OBJS = $(SRCS:.c=.o)
 
 TARGET = mfs

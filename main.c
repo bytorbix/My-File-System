@@ -6,9 +6,21 @@
 #include "disk.h"
 #include "fs.h"
 #include "dir.h"
+#include "utils.h"
 
 void print_passed(const char* message) { printf("[OK]:   %s\n", message); }
 void print_failed(const char* message) { printf("[FAIL]: %s\n", message); }
+
+void bitmap_stats(FileSystem *fs)
+{
+    uint32_t total = fs->meta_data->blocks;
+    uint32_t used = 0;
+    for (uint32_t i = 0; i < total; i++)
+        if (get_bit(fs->bitmap, i)) used++;
+
+    printf("bitmap: %u/%u blocks used, %u free (%u bitmap block(s))\n",
+           used, total, total - used, fs->meta_data->bitmap_blocks);
+}
 
 void ls(FileSystem *fs, ssize_t dir_inode) // Demo ls command for test case
 {
@@ -102,7 +114,7 @@ void cat(FileSystem *fs, ssize_t inode_file)
 
 
 int main() {
-    Disk *disk = disk_open("mfs_test_disk.img", 100);
+    Disk *disk = disk_open("mfs_test_disk.img", 10000);
     fs_format(disk);
 
     FileSystem fs = {0};
@@ -129,7 +141,6 @@ int main() {
     if (dir_add(&fs, inode_sub_dir1, "dir3", inode_sub_dir2) < 0) {
         print_failed("dir_add test_case3 failed");
     }
-    
 
     // Adding the files 
     if (dir_add(&fs, inode_sub_dir2, "file1", inode_file1) < 0) {
@@ -156,6 +167,8 @@ int main() {
 
     // print the file with content
     cat(&fs, inode_file2);
+
+    bitmap_stats(&fs);
 
     // Close and exit
     fs_unmount(&fs);

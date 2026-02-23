@@ -9,7 +9,7 @@
     #include <stdint.h>
     #include <stdlib.h>
     #include <math.h>
-    #include <stdio.h> // Added for consistency with required types like ssize_t
+    #include <stdio.h> 
 
     // File System Constants
     #define MAGIC_NUMBER (0xf0f03410)
@@ -17,6 +17,7 @@
     #define POINTERS_PER_INODE (5)
     #define POINTERS_PER_BLOCK (1024)
     #define BITS_PER_WORD (32)
+    #define BITS_PER_BITMAP_BLOCK (BLOCK_SIZE*8)
     
     // Inode
     #define INODE_FREE 0
@@ -32,13 +33,8 @@
         uint32_t blocks;        // Total number of blocks in the file system
         uint32_t inode_blocks;  // Total number of blocks reserved for the Inode Table
         uint32_t inodes;        // Total number of Inode structures
+        uint32_t bitmap_blocks;  // Total amount of bitmap blocks
     };
-
-    typedef struct Bitmap Bitmap;
-    struct Bitmap {
-        uint32_t *bitmap;   // Bitmap array Cache
-    };
-
 
     typedef struct Inode Inode;
     struct Inode{
@@ -89,7 +85,6 @@
     ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset);
     ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length, size_t offset);
     size_t* fs_allocate(FileSystem *fs, size_t blocks_to_reserve);
-    bool fs_bitmap_to_disk(FileSystem *fs);
     ssize_t fs_lookup(FileSystem *fs, const char *path);
 
     #endif // FS_H

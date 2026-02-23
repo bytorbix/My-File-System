@@ -1,6 +1,7 @@
 #include "fs.h"
 #include "disk.h"
 #include "dir.h"
+#include "bitmap.h"
 #include "utils.h"
 #include <stdio.h> 
 #include <string.h> 
@@ -32,57 +33,7 @@ void fs_debug(FileSystem *fs) {
     
 }
 
-bool fs_bitmap_to_disk(FileSystem *fs) {
-    if (fs->disk == NULL || fs == NULL) {
-        perror("fs_debug: Error disk is invalid");
-        return false;
-    }
-    if (fs->bitmap == NULL) {
-        perror("fs_bitmap_to_disk: Error bitmap is invalid");
-        return false;
-    }
 
-    Block buffer;
-    // Clean the buffer so unused bits are zero
-    memset(buffer.data, 0, BLOCK_SIZE);
-
-    // Calculate the EXACT size of bitmap in bytes
-    uint32_t total_blocks = fs->meta_data->blocks;
-    uint32_t bitmap_words = (total_blocks + BITS_PER_WORD - 1) / BITS_PER_WORD;
-    size_t bitmap_size_bytes = bitmap_words * sizeof(uint32_t);
-
-    memcpy(buffer.data, fs->bitmap, bitmap_size_bytes);
-
-    ssize_t bitmap_block = fs->meta_data->inode_blocks + 1; 
-    if (disk_write(fs->disk, bitmap_block, buffer.data) < 0) {
-        perror("fs_bitmap_to_disk: Failed to write Bitmap to disk");
-        return false;
-    }
-    return true;
-}
-
-
-bool fs_load_bitmap(FileSystem *fs) {
-    if (fs == NULL || fs->disk == NULL || fs->meta_data == NULL || fs->bitmap == NULL) {
-        return false;
-    }
-
-    uint32_t total_blocks = fs->meta_data->blocks;
-    uint32_t bitmap_words = (total_blocks + 32 - 1) / 32;
-    size_t bitmap_bytes = bitmap_words * sizeof(uint32_t);
-
-    ssize_t bitmap_block_num = fs->meta_data->inode_blocks + 1;
-    Block buffer;
-
-    if (disk_read(fs->disk, bitmap_block_num, buffer.data) < 0) {
-        perror("fs_load_bitmap: Failed to read bitmap block from disk");
-        return false;
-    }
-
-    memcpy(fs->bitmap, buffer.data, bitmap_bytes);
-
-    return true;
-}
 
 bool fs_format(Disk *disk) 
 {
@@ -99,6 +50,7 @@ bool fs_format(Disk *disk)
     SuperBlock superblock; 
     superblock.magic_number = MAGIC_NUMBER;
     superblock.blocks = (uint32_t)disk->blocks;
+    superblock.bitmap_blocks = (superblock.blocks + BITS_PER_BITMAP_BLOCK - 1) / BITS_PER_BITMAP_BLOCK; // Calculation of the bitmap blocks needed for the entire disk
 
     // Inodes
     double percent_blocks = (double)superblock.blocks * 0.10;   
@@ -107,9 +59,9 @@ bool fs_format(Disk *disk)
 
     
     // Capacity check
-    if (1 + superblock.inode_blocks > superblock.blocks+1) {
+    if ((1 /*Superblock*/) + superblock.inode_blocks + superblock.bitmap_blocks >= superblock.blocks) {
         fprintf(stderr, "fs_format: Error metadata blocks amount (%u) exceeds disk capacity (%u)\n", 
-                1 + superblock.inode_blocks, superblock.blocks);
+                1 + superblock.inode_blocks+superblock.bitmap_blocks, superblock.blocks);
         return false;
     }
 
@@ -126,12 +78,19 @@ bool fs_format(Disk *disk)
         perror("fs_format: Failed to write SuperBlock to disk");
         return false;
     }
+
+
+    // format the bitmaps blocks
+    if (!format_bitmap(disk, superblock.inode_blocks, superblock.bitmap_blocks)) {
+        perror("fs_format: Failed to format bitmap");
+        return false;
+    }
     
 
     memset(block_buffer.data, 0, BLOCK_SIZE);
 
     // Clean the inode table
-    for (uint32_t i = 1; i <= superblock.inode_blocks+1; i++) {
+    for (uint32_t i = 1; i <= superblock.inode_blocks; i++) {
         if (disk_write(disk, i, block_buffer.data) < 0) {
             perror("fs_format: Failed to clear inode table blocks");
             return false;
@@ -149,7 +108,6 @@ bool fs_format(Disk *disk)
         perror("fs_format: Failed to write block to disk");
         return false;
     }
-
     // success
     return true;
 }
@@ -192,12 +150,11 @@ bool fs_mount(FileSystem *fs, Disk *disk) {
 
     uint32_t total_inodes = fs->meta_data->inodes;
     uint32_t total_blocks = fs->meta_data->blocks;
-    uint32_t meta_data_blocks = fs->meta_data->inode_blocks + 1 + 1;
+    uint32_t meta_data_blocks = fs->meta_data->inode_blocks + fs->meta_data->bitmap_blocks + 1;
     
 
-    // Bitmap
-    uint32_t bitmap_words = (total_blocks + BITS_PER_WORD -1)  / BITS_PER_WORD;
-
+    // Bitmap — allocate full blocks so disk_read won't overflow the buffer
+    uint32_t bitmap_words = fs->meta_data->bitmap_blocks * (BLOCK_SIZE / sizeof(uint32_t));
 
     fs->bitmap = (uint32_t *)calloc(bitmap_words, sizeof(uint32_t));
     if (fs->bitmap == NULL) {
@@ -206,7 +163,7 @@ bool fs_mount(FileSystem *fs, Disk *disk) {
         return false;
     }
 
-    bool bitmap_loaded_valid = fs_load_bitmap(fs);
+    bool bitmap_loaded_valid = load_bitmap(fs);
     if (bitmap_loaded_valid) {
         if (get_bit(fs->bitmap, 0) == 0) {
             bitmap_loaded_valid = false; 
@@ -257,7 +214,6 @@ bool fs_mount(FileSystem *fs, Disk *disk) {
                         perror("fs_mount: Failed to read indirect block during scan");
                         free(fs->meta_data);
                         free(fs->bitmap);
-                        free(fs->ibitmap);
                         return false;
                     }
 
@@ -376,7 +332,7 @@ size_t* fs_allocate(FileSystem *fs, size_t blocks_to_reserve) {
     // init of the bitmap
     uint32_t *bitmap = fs->bitmap;
     uint32_t total_blocks = fs->meta_data->blocks;
-    size_t meta_blocks = 2 + (fs->meta_data->inode_blocks); 
+    size_t meta_blocks = 1 + fs->meta_data->inode_blocks + fs->meta_data->bitmap_blocks;
 
     // Declaring the allocation blocks array
     size_t *allocated_array = calloc(blocks_to_reserve, sizeof(size_t)); 
@@ -652,7 +608,7 @@ ssize_t fs_write(FileSystem *fs, size_t inode_number, char *data, size_t length,
     }
 
     // For now we save the bitmap after every single write until a solution comes up
-    fs_bitmap_to_disk(fs);
+    save_bitmap(fs);
     return bytes_written;
 }
 
@@ -723,7 +679,9 @@ ssize_t fs_read(FileSystem *fs, size_t inode_number, char *data, size_t length, 
             }
             if (target->indirect == 0) {
                 memset(data + bytes_read, 0, block_end - block_start);
-            } else {
+            } 
+            else 
+            {
                 Block pointers_block;
                 if (disk_read(fs->disk, target->indirect, pointers_block.data) < 0) {
                     fprintf(stderr, "fs_read: Error reading indirect block has failed.\n");
@@ -825,7 +783,7 @@ bool fs_remove(FileSystem *fs, size_t inode_number)
     set_bit(fs->ibitmap, inode_number, 0);
 
     // Persist the block bitmap (Temporary)
-    fs_bitmap_to_disk(fs);
+    save_bitmap(fs);
     return true;
 }
 ssize_t fs_stat(FileSystem *fs, size_t inode_number) 
