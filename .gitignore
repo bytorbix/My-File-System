@@ -7,4 +7,6 @@ mfs_test_disk.img
 *.o
 *.img
 mfs
+pfs
+pfs_fuse
 .vscode/
