@@ -22,4 +22,7 @@ struct Inode{
     uint32_t direct[POINTERS_PER_INODE]; // Direct block addresses for the file's first data blocks.
     uint32_t indirect;                   // Address of the single indirect block (1024 indirect pointers).
     uint32_t double_indirect;            // Address of the double indirect block
+
+    // FUSE related fields needed (perms, time)
+    
 };

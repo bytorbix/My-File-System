@@ -7,6 +7,7 @@
 #include "fs.h"
 #include "dir.h"
 #include "utils.h"
+#include "pfs.h"
 
 void print_passed(const char* message) { printf("[OK]:   %s\n", message); }
 void print_failed(const char* message) { printf("[FAIL]: %s\n", message); }
@@ -114,61 +115,44 @@ void cat(FileSystem *fs, ssize_t inode_file)
 
 
 int main() {
-    Disk *disk = disk_open("mfs_test_disk.img", 10000);
-    fs_format(disk);
+    Disk *disk = disk_open("disk.img", 100000);
+    pfs_format(disk);
 
-    FileSystem fs = {0};
-    fs_mount(&fs, disk);
-
-
-    // Allocate inodes
-    ssize_t inode_file1 = fs_create(&fs);
-    ssize_t inode_file2 = fs_create(&fs);
-    ssize_t inode_file3 = fs_create(&fs);
+    pFileSystem *pfs = calloc(1, sizeof(pFileSystem));
+    pfs_mount(pfs, disk);
 
     // Allocate a directory
-    ssize_t inode_dir1 = dir_create(&fs);
-    ssize_t inode_sub_dir1 = dir_create(&fs);
-    ssize_t inode_sub_dir2 = dir_create(&fs);
+    ssize_t inode_dir1 = dir_create(pfs->fs);
+    ssize_t inode_sub_dir1 = dir_create(pfs->fs);
+    ssize_t inode_sub_dir2 = dir_create(pfs->fs);
 
     // Adding directories
-    if (dir_add(&fs, 0, "dir1", inode_dir1) < 0) {
+    if (dir_add(pfs->fs, 0, "dir1", inode_dir1) < 0) {
         print_failed("dir_add test_case1 failed");
     }
-    if (dir_add(&fs, inode_dir1, "dir2", inode_sub_dir1) < 0) {
+    if (dir_add(pfs->fs, inode_dir1, "dir2", inode_sub_dir1) < 0) {
         print_failed("dir_add test_case2 failed");
     }
-    if (dir_add(&fs, inode_sub_dir1, "dir3", inode_sub_dir2) < 0) {
+    if (dir_add(pfs->fs, inode_sub_dir1, "dir3", inode_sub_dir2) < 0) {
         print_failed("dir_add test_case3 failed");
     }
 
     // Adding the files 
-    if (dir_add(&fs, inode_sub_dir2, "file1", inode_file1) < 0) {
-        print_failed("dir_add test_case4 failed");
-    }
-
-    if (dir_add(&fs, inode_sub_dir2, "file2", inode_file2) < 0) {
-        print_failed("dir_add test_case5 failed");
-    }
-
-    if (dir_add(&fs, inode_sub_dir2, "file3", inode_file3) < 0) {
-        print_failed("dir_add test_case6 failed");
-    }
-
+    ssize_t inode = pfs_create(pfs, "/dir1/dir2/dir3/file1.txt");
     // Writing data into one of the files
     char *text = "Hello World!";
-    if (fs_write(&fs, inode_file2, text, strlen(text), 0) < 0) return -1;
+    if (pfs_write(pfs, inode, text, strlen(text), 0) < 0) return -1;
 
     // Lookup the sub directories that holds the files
-    ssize_t desired_dir  = fs_lookup(&fs, "/dir1/dir2/dir3");
+    ssize_t desired_dir  = fs_lookup(pfs->fs, "/dir1/dir2/dir3");
     
     // List files in the directory
-    ls(&fs, desired_dir);
+    ls(pfs->fs, desired_dir);
 
     // print the file with content
-    cat(&fs, inode_file2);
+    cat(pfs->fs, inode);
 
-    bitmap_stats(&fs);
+    bitmap_stats(pfs->fs);
 
     // Double Indirect Test (5MB file, exceeds single indirect ~4MB range)
     size_t large_size = 5 * 1024 * 1024;
@@ -176,24 +160,26 @@ int main() {
     char *read_buf  = malloc(large_size);
     memset(write_buf, 0xAB, large_size);
 
-    ssize_t inode_large = fs_create(&fs);
-    fs_write(&fs, inode_large, write_buf, large_size, 0);
-    fs_read(&fs, inode_large, read_buf, large_size, 0);
+    ssize_t inode_large = pfs_create(pfs, "/dir1/dir2/dir3/largefile.bin");
+    pfs_write(pfs, inode_large, write_buf, large_size, 0);
+    fs_read(pfs->fs, inode_large, read_buf, large_size, 0);
 
     if (memcmp(write_buf, read_buf, large_size) == 0)
         print_passed("double indirect: 5MB write/read verified");
     else
         print_failed("double indirect: data mismatch");
 
-    bitmap_stats(&fs);
-    fs_remove(&fs, inode_large);
-    bitmap_stats(&fs);
+    bitmap_stats(pfs->fs);
+    fs_remove(pfs->fs, inode_large);
+    bitmap_stats(pfs->fs);
 
     free(write_buf);
     free(read_buf);
+     
 
     // Close and exit
-    fs_unmount(&fs);
+    pfs_unmount(pfs);
+    free(pfs);
     return 0;
 }
 

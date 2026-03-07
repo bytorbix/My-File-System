@@ -14,7 +14,7 @@
 
 // File System Constants
 #define MAGIC_NUMBER (0xf0f03410)
-#define INODES_PER_BLOCK (128)
+#define INODES_PER_BLOCK (BLOCK_SIZE / sizeof(Inode))
 #define POINTERS_PER_BLOCK (1024)
 
 // File System Structure

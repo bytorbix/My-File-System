@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include "pfs.h"
 #include "utils.h"
+#include "dir.h"
 
 
 bool pfs_format(Disk *disk)
@@ -29,7 +30,7 @@ bool pfs_mount(pFileSystem *pfs, Disk *disk)
         if (pfs->entries == NULL) {
             return false;
         }
-        ExtensionEntry *ptr = buffer.data;
+        ExtensionEntry *ptr = (ExtensionEntry *)buffer.data;
 
         for (size_t i = 0; i < ENTRIES_PER_BLOCK; i++) {
             if (ptr[i].name[0] != '\0') {
@@ -78,16 +79,23 @@ ssize_t pfs_create(pFileSystem *pfs, const char *path)
             return -1;
         }
 
-        // Extract Extension and add it to the entries 
+        // Extract Extension and add it to the entries if the extension doesn't work
         char *extension = extract_extension(filename);
         if (extension != NULL) 
         {   
-            ExtensionEntry entry;
-            strcpy(entry.name, extension);
-            add_entry(pfs, &entry);
+            ExtensionEntry tempEntry;
+            strcpy(tempEntry.name, extension);
+            tempEntry.count = 0;
+            ExtensionEntry *entry = add_entry(pfs, &tempEntry);
+            if (entry == NULL) 
+            {
+                free(parentdir_path);
+                return -1;
+            }
+            entry->count++;
+            pfs->dirty = true;
+
         }
-
-
         // cleanup and return
         free(parentdir_path);
         return inode_file;
@@ -114,11 +122,34 @@ ssize_t pfs_write(pFileSystem *pfs, size_t inode_number, char *data, size_t leng
     return flag;
 }
 
-int add_entry(pFileSystem *pfs, const ExtensionEntry *entry) 
+bool pfs_unmount(pFileSystem *pfs) 
+{
+    if (pfs == NULL) {
+        perror("pfs_unmount: Error pfs is invalid");
+        return false;
+    }
+    if (pfs->dirty) 
+    {
+        Block entries_block;
+        size_t pfs_block = pfs->fs->meta_data->inode_blocks + pfs->fs->meta_data->bitmap_blocks + 1;
+        memcpy(entries_block.data, pfs->entries, ENTRIES_PER_BLOCK*ENTRY_SIZE);
+        if (disk_write(pfs->fs->disk, pfs_block, entries_block.data) < 0) 
+        {
+            perror("pfs_unmount: Failed writing to disk");
+            return false;
+        }
+    }
+    fs_unmount(pfs->fs);
+    free(pfs->entries);
+    free(pfs->fs);
+    return true;
+}
+
+ExtensionEntry* add_entry(pFileSystem *pfs, const ExtensionEntry *entry) 
 {   
     // validation check
     if (entry->name[0] == '\0') {
-        return -1;
+        return NULL;
     }
     for (size_t i = 0; i < ENTRIES_PER_BLOCK; i++) 
     {
@@ -126,13 +157,33 @@ int add_entry(pFileSystem *pfs, const ExtensionEntry *entry)
         if (strcmp(temp_entry->name, entry->name) == 0) 
         {
             perror("add_entry: found a duplicate, skipping..");
-            return 1;
+            return &pfs->entries[i];
         }
         if (*temp_entry->name == '\0') 
         {
             memcpy(&pfs->entries[i], entry, ENTRY_SIZE);
-            return 0;
+            return &pfs->entries[i];
         }
     }
-    return -1;
+    return NULL;
+}
+
+ExtensionEntry* find_entry(pFileSystem *pfs, const char *extension) 
+{
+    // validation check
+    if (extension == NULL || extension[0] == '\0' || pfs == NULL) 
+    {
+        perror("find_entry: extension or pfs given is invalid");
+        return NULL;
+    }
+    for (size_t i = 0; i <ENTRIES_PER_BLOCK; i++) 
+    {
+        if (strcmp(pfs->entries[i].name, extension) == 0) 
+        {
+            // entry is found, returning pointer
+            return &pfs->entries[i];
+        }
+    }
+    // an entry with the extension is not found
+    return NULL;
 }

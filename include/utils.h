@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
+#include <string.h>
 
 static inline void flip_bit(uint32_t *bitmap, int offset) 
 {
